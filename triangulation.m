@@ -1,45 +1,30 @@
-% Constants
-c = 343; % Speed of sound in m/s
-f = 440; % Frequency of source in Hz
-Fs = 44100; % Sampling rate in Hz
-duration = 0.1; % Duration of the signal in seconds
-
+[audio1, sampleRate1] = audioread("Recording 1\file_stereo.wav");
+[audio2, sampleRate2] = audioread("Recording 2\file_stereo.wav");
+c = 343;
 % Microphone positions
-mic = [0, 0;      % Mic 1
-       0.8, 0;    % Mic 2
-       0, 0.5;    % Mic 3
-       0.8, 0.5]; % Mic 4
+mic = [0, 0.255;      % Mic 1
+       0.8, 0.26;    % Mic 2
+       0, 0.4;    % Mic 3
+       0.8, 0.4]; % Mic 4
 
-% Simulated source position
-source_x = rand()*0.8;
-source_y = rand()*0.5;
 
-% Generate a simple sine wave
-t = 0:1/Fs:duration;
-signal = sin(2*pi*f*t);
+% Calculate the duration of the audio in seconds
+durationInSeconds = numel(audio1(:,1)) / sampleRate1;
 
-% Compute distances from the source to each microphone
-d = sqrt(sum((mic - [source_x, source_y]).^2, 2));
+% Create a time vector that represents the time axis
+time = linspace(0, durationInSeconds, numel(audio1(:,1)));
 
-% Calculate delays for each microphone
-delays = round((d / c) * Fs); %Mic 'samples' at a rate of Fs samples per second. Therefore will pad signal in beginning with 'delays'zeroes
+% Plot the audio waveform
+plot(time, audio2);
+hold on;
+plot(time, audio1);
 
-% Create delayed signals for each microphone
-delayed_signals = zeros(4, length(signal) + max(delays));
-tic;
-for i = 1:4
-    delayed_signals(i, delays(i) + 1 : delays(i) + length(signal)) = signal;
-end
-
-% Add white Gaussian noise to the signals
-noise_level = 0.05; % Adjust as needed
-noisy_signals = delayed_signals + noise_level*randn(size(delayed_signals));
-
+noisy_signals = [audio1, audio2];
 time_diffs = zeros(1,3);
 for i = 2:4
     [cross_corr, lags] = xcorr(noisy_signals(1,:), noisy_signals(i,:));
     [~, idx] = max(cross_corr);
-    time_diffs(i-1) = lags(idx) / Fs;
+    time_diffs(i-1) = lags(idx) / sampleRate1;
 end
 
 % Generate symbolic hyperbolic equations
@@ -85,27 +70,15 @@ C = [x_intersections3, y_intersections3];
 % Compute centroid
 centroid_x = (A(1) + B(1) + C(1)) / 3;
 centroid_y = (A(2) + B(2) + C(2)) / 3;
-elapsed_time = toc;
 
 centroid = [centroid_x, centroid_y];
-source = [source_x, source_y];
 
 % Display the centroid
 disp('Centroid of the triangle:');
 disp(centroid);
 
-% Display the source
-disp('Source:');
-disp(source);
-
-disp('Time:');
-disp(elapsed_time);
-
 % Plot the microphones' positions
 plot(mic(:,1), mic(:,2), 'k^', 'MarkerSize', 12, 'DisplayName', 'Microphones');
-
-% Plot the source position
-plot(source_x, source_y, 'mx', 'MarkerSize', 10, 'DisplayName', 'Source');
 
 % Plot the centroid of the triangle
 plot(centroid_x, centroid_y, 'o', 'Color', [0.6 0.2 0], 'MarkerSize', 10, 'DisplayName', 'Centroid');
@@ -117,5 +90,3 @@ ylabel('Y Coordinate');
 title('Hyperbolae Intersections, Source, and Centroid');
 grid on;
 axis([0 0.8 0 0.5]); % Setting the axis limits
-
-
