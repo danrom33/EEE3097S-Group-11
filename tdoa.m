@@ -1,6 +1,11 @@
 [audio1, sampleRate1] = audioread("Recording1\file_stereo.wav");
 [audio2, sampleRate2] = audioread("Recording2\file_stereo.wav");
 
+sig1 = audio1(:,1);
+sig2 = audio1(:,2);
+sig3 = audio2(:,1);
+sig4 = audio2(:,2);
+
 c = 343;
 % Microphone positions
 mic = [0, 0;      % Mic 1
@@ -8,80 +13,79 @@ mic = [0, 0;      % Mic 1
        0.8, 0.5;    % Mic 3
        0.8, 0.0]; % Mic 4
 
-% Define the cutoff frequency in Hz
-fc = 5000;  % 5 kHz
+
+fc_low = 300;
+fc_high = 3000;
 
 % Define the filter order (higher order results in steeper roll-off)
-filterOrder = 10;
-
-% Calculate the normalized cutoff frequency (between 0 and 1)
-normalizedFc = fc / (48000 / 2);
-
-figure;
-plot(audio1); hold on;
-plot(audio2);
-title("Unfiltered");
+filterOrder = 4;
 
 % Design a Butterworth low-pass filter
-% 'low' indicates a low-pass filter, 'Butterworth' is the filter type
-butterworthFilter = designfilt('lowpassfir','PassbandFrequency',1,'StopbandFrequency',1000,'PassbandRipple',1,'StopbandAttenuation',60,'SampleRate',48000);
+[b, a] = butter(filterOrder, [fc_low, fc_high] / (48000/2), 'bandpass');
 
 % Apply the filter to your signal
-audio1 = filter(butterworthFilter, audio1);
-audio2 = filter(butterworthFilter, audio2);
+sig1 = filter(b, a, sig1);
+sig2 = filter(b, a, sig2);
+sig3 = filter(b, a, sig3);
+sig4 = filter(b, a, sig4);
+
+sig1(1:0.3*48000) = 0;
+sig2(1:0.3*48000) = 0;
+sig3(1:0.3*48000) = 0;
+sig4(1:0.3*48000) = 0;
+
+% Calculate the duration of the audio in seconds
+durationInSeconds = numel(sig1) / sampleRate1;
+time = linspace(0, durationInSeconds, numel(sig1));
+
+cal_delay = 15*sampleRate1;
+
+%Calibration
+cal1 = sig1(1:cal_delay);
+cal2 = sig2(1:cal_delay);
+cal3 = sig3(1:cal_delay);
+cal4 = sig4(1:cal_delay);
+%After calibration
+sig1 = sig1(cal_delay:end);
+sig2 = sig2(cal_delay:end);
+sig3 = sig3(cal_delay:end);
+sig4 = sig4(cal_delay:end);
+
+durationInSeconds = numel(cal1) / sampleRate1;
+time = linspace(0, durationInSeconds, numel(cal1));
 
 figure;
-plot(audio1); hold on;
-plot(audio2);
-title("Filtered");
+plot(time, cal1, 'DisplayName', 'Audio 1 After Alignment'); hold on;
+plot(time, cal3, 'DisplayName', 'Audio 2 After Alignment'); hold off;
+title('Signals After Alignment');
+legend('show');
 
-channel1 = audio1(:,1);
-channel2 = audio2(:,1);
-
-[crossCorr, lags] = xcorr(channel1, channel2);
+[crossCorr, lags] = xcorr(cal1, cal3);
 [~, maxIndex] = max(abs(crossCorr));
 sampleDelay = lags(maxIndex);  % This is the delay in number of samples
 
 if sampleDelay > 0
-    audio1 = audio1(sampleDelay+1:end, :); % Trim audio1 to synchronize
+    sig1 = sig1(sampleDelay+1:end); % Trim audio1 to synchronize
+    sig2 = sig2(sampleDelay+1:end);
 elseif sampleDelay < 0
-    audio2 = audio2(abs(sampleDelay)+1:end, :); % Trim audio2 to synchronize
+    sig3 = sig3(abs(sampleDelay)+1:end);
+    sig4 = sig4(abs(sampleDelay)+1:end);
 end
 
 % Ensure both audio signals are of equal length after trimming
-maxLength = max(length(audio1), length(audio2));
-audio1 = [audio1;zeros(maxLength-length(audio1), 2)];
-audio2 =[audio2;zeros(maxLength-length(audio2), 2)];
+maxLength = max(length(sig1), length(sig3));
+sig1 = [sig1;zeros(maxLength-length(sig1),1)];
+sig2 =[sig2;zeros(maxLength-length(sig2),1)];
+sig3 = [sig3;zeros(maxLength-length(sig3),1)];
+sig4 =[sig4;zeros(maxLength-length(sig4),1)];
 
-% Calculate the duration of the audio in seconds
-durationInSeconds = numel(audio1(:,1)) / sampleRate1;
+% figure;
+% plot(time, audio1, 'DisplayName', 'Audio 1 After Alignment'); hold on;
+% plot(time, audio2, 'DisplayName', 'Audio 2 After Alignment'); hold off;
+% title('Signals After Chop');
+% legend('show');
 
-% Create a time vector that represents the time axis
-time = linspace(0, durationInSeconds, numel(audio1(:,1)));
-
-
-% Plot the audio waveform
-figure;
-plot(time, audio1, 'DisplayName', 'Audio 1 After Alignment'); hold on;
-plot(time, audio2, 'DisplayName', 'Audio 2 After Alignment'); hold off;
-title('Signals After Alignment');
-legend('show');
-
-calibration_delay = 1;
-audio1 = audio1(calibration_delay:end, :);
-audio2 = audio2(calibration_delay:end, :);
-durationInSeconds = numel(audio1(:,1)) / sampleRate1;
-
-% Create a time vector that represents the time axis
-time = linspace(0, durationInSeconds, numel(audio1(:,1)));
-
-figure;
-plot(time, audio1, 'DisplayName', 'Audio 1 After Alignment'); hold on;
-plot(time, audio2, 'DisplayName', 'Audio 2 After Alignment'); hold off;
-title('Signals After Chop');
-legend('show');
-
-noisy_signals = [audio1, audio2];
+noisy_signals = [sig1, sig2, sig3, sig4];
 time_diffs = zeros(1,3);
 for i = 2:4
     [cross_corr, lags] = xcorr(noisy_signals(:,1), noisy_signals(:,i));
